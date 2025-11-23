@@ -18,7 +18,7 @@ class DC:
         self.w_param = w_param
         self.f_name = ""
         self.f_size = 0.0
-        self.f_bold = False
+        self.f_format = 0
         self.c_alpha = 0
         self.c_color = (0, 0, 0)
         self.w_text = ""
@@ -55,21 +55,37 @@ class DC:
                     2: {
                         "name": "Memory",
                         "w_param": {
+                            1: "temperature",
+                            2: "usage",
+                            3: "clock",
+                            4: "free",
                         },
                     },
                     3: {
                         "name": "HDD",
                         "w_param": {
+                            1: "temperature",
+                            2: "activity",
+                            3: "read",
+                            4: "write",
                         },
                     },
                     4: {
                         "name": "Network",
                         "w_param": {
+                            1: "up rate",
+                            2: "down rate",
+                            3: "total up",
+                            4: "total down",
                         },
                     },
                     5: {
                         "name": "FAN",
                         "w_param": {
+                            1: "pump",
+                            2: "cpu fan",
+                            3: "fan1",
+                            4: "fan2",
                         },
                     },
                     10000: {
@@ -154,7 +170,7 @@ class DC:
                 f"Device: {type_desc[self.w_type]["w_device"][self.w_device]["name"]}\n"
                 f"Device param: {type_desc[self.w_type]["w_device"][self.w_device]["w_param"][self.w_param]}\n"
                 f"Text: {self.w_text}\n"
-                f"Font: {self.f_name} size {self.f_size} bold {self.f_bold}\n"
+                f"Font: {self.f_name} size {self.f_size} format {self.f_format}\n"
                 f"Color: {self.c_color} with alpha {self.c_alpha}\n"
                 f"Offset: ({self.x_offset}, {self.y_offset})\n")
 
@@ -186,9 +202,9 @@ def dc_load_dd(dc) -> int:
             rdc.f_name = b.decode("utf-8", errors="ignore")
 
         b = dc.read(5)
-        f_size, f_bold = struct.unpack("<fB", b)
+        f_size, f_fmt = struct.unpack("<fB", b)
         rdc.f_size = f_size
-        rdc.f_bold = f_bold > 0
+        rdc.f_format = f_fmt
 
         b = dc.read(2)
         if b != b"\x03\x86":
