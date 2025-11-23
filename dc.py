@@ -40,6 +40,7 @@ class DC:
                             1: "temperature",
                             2: "usage",
                             3: "frequency",
+                            4: "power",
                         },
                     },
                     1: {
@@ -48,12 +49,33 @@ class DC:
                             1: "temperature",
                             2: "usage",
                             3: "frequency",
+                            4: "power",
+                        },
+                    },
+                    2: {
+                        "name": "Memory",
+                        "w_param": {
+                        },
+                    },
+                    3: {
+                        "name": "HDD",
+                        "w_param": {
+                        },
+                    },
+                    4: {
+                        "name": "Network",
+                        "w_param": {
+                        },
+                    },
+                    5: {
+                        "name": "FAN",
+                        "w_param": {
                         },
                     },
                     10000: {
                         "name": "FAN",
                         "w_param": {
-                            1: "RPMs",
+                            1: "FAN",
                         },
                     },
                 },
