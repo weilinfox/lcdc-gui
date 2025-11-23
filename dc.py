@@ -171,7 +171,8 @@ class DC:
                 f"Device param: {type_desc[self.w_type]["w_device"][self.w_device]["w_param"][self.w_param]}\n"
                 f"Text: {self.w_text}\n"
                 f"Font: {self.f_name} size {self.f_size}\n"
-                f"Format bold {self.f_format & 1}, italic {self.f_format & 2}, underline {self.f_format & 4}, strikeout {self.f_format & 8}\n"
+                f"Format bold {self.f_format & 1 > 0}, italic {self.f_format & 2 > 0}, "
+                f"underline {self.f_format & 4 > 0}, strikeout {self.f_format & 8 > 0}\n"
                 f"Color: {self.c_color} with alpha {self.c_alpha}\n"
                 f"Offset: ({self.x_offset}, {self.y_offset})\n")
 
