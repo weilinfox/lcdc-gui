@@ -256,6 +256,26 @@ class TEMP:
                 f"Misc Temp: {self.misc_temps}\n")
 
 
+class SYSTEM:
+    def __init__(self):
+        self.boot_time = psutil.boot_time()
+        self.cpu_count = psutil.cpu_count(logical=True)
+
+        self.load_average: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        self.iowait: float = 0.0
+
+        self.update()
+
+    def update(self) -> None:
+        self.load_average = psutil.getloadavg()
+        self.iowait = psutil.cpu_times(percpu=False).iowait / self.cpu_count
+
+    def __str__(self) -> str:
+        return (f"Boot Time: {self.boot_time}\n"
+                f'Load Average: {self.load_average}\n'
+                f'IOWAIT: {self.iowait}\n')
+
+
 if __name__ == "__main__":
     cpu = CPU()
     net = NET()
@@ -264,6 +284,7 @@ if __name__ == "__main__":
     bat = BAT()
     disk = DISK()
     mem = MEMORY()
+    system = SYSTEM()
     time.sleep(1)
     net.update()
     disk.update()
@@ -273,5 +294,6 @@ if __name__ == "__main__":
     print(mem)
     print(disk)
     print(temp)
+    print(system)
     print(bat)
     print(fan)
