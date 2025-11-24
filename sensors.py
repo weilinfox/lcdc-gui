@@ -1,3 +1,4 @@
+import pathlib
 import psutil
 import time
 
@@ -94,6 +95,9 @@ class DISK:
         self.rate_write = 0.0
         self.rate_read = 0.0
 
+        self.disk_count = 0
+        self.disk_temp: List[List[Tuple[str, float]]] = []
+
         self.update()
 
     def update(self) -> None:
@@ -110,11 +114,41 @@ class DISK:
         self.rate_write = (self.bytes_write - self.bytes_write_old) / (self.bytes_time - self.bytes_time_old)
         self.rate_read = (self.bytes_read - self.bytes_read_old) / (self.bytes_time - self.bytes_time_old)
 
+        # disk temperature sensors
+        disk_count = 0
+        disk_temp = []
+        sys_base = pathlib.Path("/sys/block")
+
+        if not sys_base.exists():
+            return
+        for d in sys_base.iterdir():
+            for s in d.glob("device/hwmon*"):
+                sensors = []
+                for t in s.glob("temp*_label"):
+                    if not t.is_file():
+                        continue
+                    sn = t.read_bytes().decode(encoding="ascii").strip()
+                    fi = t.parent.absolute() / ( t.name[:-5] + "input" )
+                    if not fi.is_file():
+                        continue
+                    si = float(fi.read_bytes().decode(encoding="ascii")) / 1000.0
+
+                    sensors.append( (sn, si) )
+
+                if len(sensors) > 0:
+                    disk_count += 1
+                    disk_temp.append(sensors)
+
+        self.disk_count = disk_count
+        self.disk_temp = disk_temp
+
     def __str__(self) -> str:
         return (f'Disk Bytes Write: {self.bytes_write}\n'
                 f'Disk Bytes Read: {self.bytes_read}\n'
                 f'Disk Bytes Write Rate: {self.rate_write}\n'
-                f'Disk Bytes Read Rate: {self.rate_read}\n')
+                f'Disk Bytes Read Rate: {self.rate_read}\n'
+                f'Disk Count: {self.disk_count}\n'
+                f'Disk Temperatures: {self.disk_temp}\n')
 
 
 class NET:
