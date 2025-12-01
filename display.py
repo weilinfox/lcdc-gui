@@ -23,8 +23,8 @@ def test_chizhu():
     cfg = dev.get_active_configuration()[(0, 0)]
     logger.warning("==========")
 
-    ep_out = None  # write（host -> device）
-    ep_in = None  # read（device -> host）
+    ep_out = None  # write(host -> device)
+    ep_in = None  # read(device -> host)
 
     for ep in cfg:
         if usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK:
@@ -70,7 +70,8 @@ def test_chizhu():
     # 00 60 00 00 ff db 00 43 00 02 01 01 01 01 01 02
 
     fb = None
-    with open("/home/hachi/Documents/Untitled.jpg", "rb") as f:
+    #with open("/home/hachi/Documents/Untitled.jpg", "rb") as f:
+    with open("/home/hachi/Documents/Untitled2.jpg", "rb") as f:
     #with open("/home/hachi/Desktop/test.jpg", "rb") as f:
         fb = f.read()
 
@@ -83,13 +84,19 @@ def test_chizhu():
 
     # baseline DCT only
     # no optimized Huffman
-    data = (bytes.fromhex("""
-    12 34 56 78 02 00 00 00 e0 01 00 00 e0 01 00 00
-    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    #data = (bytes.fromhex("""
+    #12 34 56 78 02 00 00 00 e0 01 00 00 e0 01 00 00
+    #00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    #00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    #00 00 00 00 00 00 00 00 02 00 00 00""")
+    #        + len(fb).to_bytes(4, byteorder="little") + fb
+    #        )
+    data = (bytes.fromhex("12 34 56 78 02 00 00 00") +
+    int(1920).to_bytes(4, byteorder="little") + int(480).to_bytes(4, byteorder="little") +
+    bytes.fromhex("""00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
     00 00 00 00 00 00 00 00 02 00 00 00""")
-            + len(fb).to_bytes(4, byteorder="little") + fb
-            )
+            + len(fb).to_bytes(4, byteorder="little") + fb )
     logger.warning(str(data[:64].hex(" ")))
     logger.warning(str(data[64:128].hex(" ")))
 
@@ -172,7 +179,7 @@ def test_winbond():
 
     fb = None
     with open("/home/hachi/Documents/Untitled2.jpg", "rb") as f:
-    #with open("/home/hachi/Desktop/test.jpg", "rb") as f:
+    #with open("/home/hachi/Documents/Untitled.jpg", "rb") as f: # it will auto resize image
         fb = f.read()
 
     if fb is None:
