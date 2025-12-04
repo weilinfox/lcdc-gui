@@ -6,6 +6,7 @@ import logging
 import os
 import pathlib
 import random
+import re
 import string
 
 
@@ -18,13 +19,15 @@ def main(_listen_addr: str, _config_dir: str, _data_dir: str, _debug: bool) -> i
     logger = logging.getLogger(__name__)
 
     # socket or net
-    socket_use = True
-    socket_addr = "/tmp/lcdc-" + "".join(random.choice(string.ascii_letters) for _ in range(16)) + ".sock"
-    lock_file = "/tmp/lcdc@kosaka.lock"
+    listen_addr = "unix:///tmp/lcdc-" + "".join(random.choice(string.ascii_letters) for _ in range(16)) + ".sock"
+    listen_port = 0
     if _listen_addr is not None:
-        socket_use = False
-        socket_addr = _listen_addr
-    logger.info(f"Server listen at {socket_addr}")
+        if not re.match(r"[\d]+.[\d]+.[\d]+.[\d]+:[\d]+", _listen_addr):
+            logger.error(f"Invalid address format: {_listen_addr}")
+            return -1
+        listen_addr, str_port = re.match(r"([\d]+.[\d]+.[\d]+.[\d]+):([\d]+)", _listen_addr).groups()
+        listen_port = int(str_port)
+    logger.info(f"Server listen at {listen_addr}:{listen_port}")
 
     # config dir
     config_dir = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", "~/.config")).expanduser().absolute() / "lcdc"
@@ -55,6 +58,7 @@ def main(_listen_addr: str, _config_dir: str, _data_dir: str, _debug: bool) -> i
     logger.debug(f"Data directory: {data_dir}")
 
     # lock file
+    lock_file = "/tmp/lcdc@kosaka.lock"
     fd = os.open(lock_file, os.O_CREAT | os.O_RDWR)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -68,18 +72,18 @@ def main(_listen_addr: str, _config_dir: str, _data_dir: str, _debug: bool) -> i
     logger.info("Starting LCDC")
     try:
         from lcdc.server.server import run
-        ret = run(socket_use, socket_addr, config_dir, data_dir)
+        ret = run(listen_addr, listen_port, _debug, config_dir, data_dir)
     except Exception as e:
         logger.exception(f"Exception in LCDC server: {e}")
         ret = -1
+    finally:
+        logger.info("Quitting LCDC")
 
-    logger.info("Quitting LCDC")
-
-    # release lock
-    fcntl.flock(fd, fcntl.LOCK_UN)
-    logger.debug(f"Lock file released: {lock_file}")
-    os.close(fd)
-    os.remove(lock_file)
+        # release lock
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        logger.debug(f"Lock file released: {lock_file}")
+        os.close(fd)
+        os.remove(lock_file)
 
     return ret
 
