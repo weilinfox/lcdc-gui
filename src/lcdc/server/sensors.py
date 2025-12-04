@@ -116,6 +116,7 @@ class GPU:
 
     def clean(self) -> None:
         if self.nvidia:
+            self.nvidia = False
             self.pynvml.nvmlShutdown()
 
     def __str__(self) -> str:
@@ -353,6 +354,33 @@ class SYSTEM:
         return (f"Boot Time: {self.boot_time}\n"
                 f'Load Average: {self.load_average}\n'
                 f'IOWAIT: {self.iowait_percent}\n')
+
+
+class Sensors:
+    def __init__(self):
+        self._cpu = CPU()
+        self._gpu = GPU()
+        self._net = NET()
+        self._temp = TEMP()
+        self._disk = DISK()
+        self._mem = MEMORY()
+        self._system = SYSTEM()
+
+        self._data_dict = {}
+
+        self.update()
+
+    def update(self):
+        self._cpu.update()
+        self._gpu.update()
+        self._net.update()
+        self._temp.update()
+        self._disk.update()
+        self._mem.update()
+        self._system.update()
+
+    def clean(self):
+        self._gpu.clean()
 
 
 if __name__ == "__main__":
