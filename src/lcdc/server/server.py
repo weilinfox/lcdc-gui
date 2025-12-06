@@ -29,14 +29,14 @@ def run(__listen_addr: str, __listen_port: int, __debug: bool, __config_dir: pat
     lcdc_sensors = Sensors()
 
     @lcdc_app.route("/lcdc/lcdc", methods=["GET"])
-    def lcdc_lcdc():
+    def route_lcdc_lcdc():
         return flask.jsonify({
             "name": "LCDC",
             "version": "0.0.0",
         })
 
     @lcdc_app.route("/lcdc/sensors", methods=["GET"])
-    def lcdc_sensors():
+    def route_lcdc_sensors():
         sensors = lcdc_sensors.format(True, True)
         return flask.jsonify({
             k: {
