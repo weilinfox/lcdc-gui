@@ -78,6 +78,8 @@ class Theme:
             x1 = (i + 1) * bar_w if i < len(bars) - 1 else _width
             draw.rectangle([x0, 0, x1, _height], fill=c)
 
+        draw.text((10, _height - 100), "BG", (0, 0, 0))
+
         img.save(self.background, format="JPEG", quality=100, progressive=True, optimize=True)
 
     def _init_fade_mask(self, _width: int, _height: int):
@@ -91,6 +93,9 @@ class Theme:
             alpha = int(round(255 * (1 - y / (_height - 1)))) if _height > 1 else 255
             for x in range(_width):
                 p[x, y] = (255, 255, 255, alpha)
+
+        draw = ImageDraw.Draw(img)
+        draw.text((10, 100), "MASK", (0, 0, 0, 255))
 
         img.save(self.mask, format="PNG")
 
