@@ -136,8 +136,9 @@ class Canvas:
             else:
                 player_clock = WallClock()
 
-        audio_q: queue.Queue[Union[av.AudioFrame, None]] = queue.Queue(maxsize=512)
-        video_q: queue.Queue[Union[av.VideoFrame, None]] = queue.Queue(maxsize=512)
+        audio_q: queue.Queue[Union[av.AudioFrame, None]] = queue.Queue(maxsize=256)
+        video_q: queue.Queue[Union[av.VideoFrame, None]] = queue.Queue(maxsize=256)
+        timeout_q = 2.0 / video_framerate
 
 
         def demux_thread():
@@ -182,7 +183,7 @@ class Canvas:
                             for af in packet.decode():
                                 if self.stop_env.is_set():
                                     break
-                                audio_q.put(af, timeout=2.0 / video_framerate)
+                                audio_q.put(af, timeout=timeout_q)
                                 if buf_use:
                                     buf_audio.append(af)
 
@@ -192,7 +193,7 @@ class Canvas:
                                 if self.stop_env.is_set():
                                     break
 
-                                video_q.put(vf, timeout=2.0 / video_framerate)
+                                video_q.put(vf, timeout=timeout_q)
                                 if buf_use:
                                     buf_video.append(vf)
 
@@ -215,14 +216,16 @@ class Canvas:
                     # use buffer
                     if audio_flag and not audio_q.full():
                         cap = audio_q.maxsize - audio_q.qsize()
-                        for i in range(buf_audio_index, min(len(buf_audio), buf_audio_index + cap)):
-                            audio_q.put(buf_audio[i])
-                        buf_audio_index = 0 if buf_audio_index + cap >= len(buf_audio) else buf_audio_index + cap
+                        for i in range(buf_audio_index, buf_audio_index + cap):
+                            audio_q.put(buf_audio[i % len(buf_audio)])
+                        buf_audio_index = (buf_audio_index + cap) % len(buf_audio)
                     if not video_q.full():
                         cap = video_q.maxsize - video_q.qsize()
-                        for i in range(buf_video_index, min(len(buf_video), buf_video_index + cap)):
-                            video_q.put(buf_video[i])
-                        buf_video_index = 0 if buf_video_index + cap >= len(buf_video) else buf_video_index + cap
+                        for i in range(buf_video_index, buf_video_index + cap):
+                            video_q.put(buf_video[i % len(buf_video)])
+                        buf_video_index = (buf_video_index + cap) % len(buf_video)
+
+                    time.sleep(0.5)
 
             logger.debug(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                          f"Theme background demux stopped")
@@ -262,7 +265,7 @@ class Canvas:
 
                 while not self.stop_env.is_set():
                     try:
-                        frame = audio_q.get(timeout=2.0 / video_framerate)
+                        frame = audio_q.get(timeout=timeout_q)
                     except queue.Empty:
                         logger.debug(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                                      f"Theme background audio queue is empty")
@@ -308,7 +311,7 @@ class Canvas:
 
             while not self.stop_env.is_set():
                 try:
-                    frame = video_q.get(timeout=2.0 / video_framerate)
+                    frame = video_q.get(timeout=timeout_q)
                 except queue.Empty:
                     logger.debug(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                                  f"Theme background video queue is empty")
