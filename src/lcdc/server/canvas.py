@@ -180,7 +180,7 @@ class Canvas:
                             for af in packet.decode():
                                 if self.stop_env.is_set():
                                     break
-                                audio_q.put(af)
+                                audio_q.put(af, timeout=2.0 / video_framerate)
                                 if buf_use:
                                     buf_audio.append(af)
 
@@ -190,7 +190,7 @@ class Canvas:
                                 if self.stop_env.is_set():
                                     break
 
-                                video_q.put(vf)
+                                video_q.put(vf, timeout=2.0 / video_framerate)
                                 if buf_use:
                                     buf_video.append(vf)
 
@@ -260,7 +260,7 @@ class Canvas:
 
                 while not self.stop_env.is_set():
                     try:
-                        frame = audio_q.get(timeout=0.1)
+                        frame = audio_q.get(timeout=2.0 / video_framerate)
                     except queue.Empty:
                         logger.debug(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                                      f"Theme background audio queue is empty")
@@ -280,7 +280,7 @@ class Canvas:
             finally:
                 stream.close()
                 pa.terminate()
-                audio_q.shutdown()
+                # audio_q.shutdown()
                 logger.info(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                             f"Theme background audio output stopped")
 
@@ -306,7 +306,7 @@ class Canvas:
 
             while not self.stop_env.is_set():
                 try:
-                    frame = video_q.get(timeout=0.1)
+                    frame = video_q.get(timeout=2.0 / video_framerate)
                 except queue.Empty:
                     logger.debug(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                                  f"Theme background video queue is empty")
@@ -375,7 +375,7 @@ class Canvas:
                                          )
                         break
 
-            video_q.shutdown()
+            # video_q.shutdown()
             logger.info(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                         f"Theme background video output stopped")
 

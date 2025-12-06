@@ -1,3 +1,4 @@
+import time
 
 import flask
 import logging
@@ -65,6 +66,9 @@ def run(__listen_addr: str, __listen_port: int, __debug: bool, __config_dir: pat
         if __listen_port == 0:
             os.remove(__listen_addr[7:])
         logger.info("Stop server")
+
+        # core dump without this delay
+        time.sleep(0.1)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -72,6 +76,11 @@ def run(__listen_addr: str, __listen_port: int, __debug: bool, __config_dir: pat
     logger.warning("Ctrl+C to stop server")
     for _t in lcdc_canvas_paints:
         _t.start()
+
     lcdc_server.serve_forever()
+
+    # code will never reach here
+    for _t in lcdc_canvas_paints:
+        _t.join()
 
     return 0
