@@ -68,7 +68,7 @@ class Theme:
             ("magenta", (191,   0, 191)),
             ("red",     (191,   0,   0)),
             ("blue",    (  0,   0, 191)),
-          # ("black",   (  0,   0,   0)),
+            ("black",   (  0,   0,   0)),
         ]
         img = Image.new("RGB", (_width, _height), (0, 0, 0))
         draw = ImageDraw.Draw(img)
