@@ -265,7 +265,7 @@ class _TEMP:
         """
 
         temp_list: List[List[Tuple[str, float]]] = []
-        detect_flag = False
+        # detect_flag = False # only warn on /sys change
 
         def _sensor_read(_p: pathlib.Path) -> Tuple[str, float]:
             si = float(p.read_bytes().decode(encoding="ascii").strip()) / 1000.0
@@ -281,8 +281,10 @@ class _TEMP:
             temps: List[Tuple[str, float]] = []
             for p in pl:
                 if not p.exists():
-                    logger.debug(f"Disk temperature sensor {p} disappeared, set redetect flag")
-                    detect_flag = True
+                    # logger.debug(f"Disk temperature sensor {p} disappeared, set redetect flag")
+                    # detect_flag = True
+                    logger.warning(f"Disk temperature sensor {p} disappeared")
+                    temps.append(("", 0.0))
                     continue
                 temps.append(_sensor_read(p))
 
@@ -297,8 +299,10 @@ class _TEMP:
             temps: List[Tuple[str, float]] = []
             for p in pl:
                 if not p.exists():
-                    logger.debug(f"CPU temperature sensor {p} disappeared, set redetect flag")
-                    detect_flag = True
+                    # logger.debug(f"CPU temperature sensor {p} disappeared, set redetect flag")
+                    # detect_flag = True
+                    logger.warning(f"CPU temperature sensor {p} disappeared")
+                    temps.append(("", 0.0))
                     continue
                 temps.append(_sensor_read(p))
 
@@ -313,8 +317,10 @@ class _TEMP:
             temps: List[Tuple[str, float]] = []
             for p in pl:
                 if not p.exists():
-                    logger.debug(f"Misc temperature sensor {p} disappeared, set redetect flag")
-                    detect_flag = True
+                    # logger.debug(f"Misc temperature sensor {p} disappeared, set redetect flag")
+                    # detect_flag = True
+                    logger.warning(f"Misc temperature sensor {p} disappeared")
+                    temps.append(("", 0.0))
                     continue
                 temps.append(_sensor_read(p))
 
@@ -323,9 +329,9 @@ class _TEMP:
 
         self.misc_temps = temp_list
 
-        if detect_flag:
-            logger.debug(f"Temperature sensor redetect")
-            self.detect()
+        # if detect_flag:
+        #     logger.debug(f"Temperature sensor redetect")
+        #     self.detect()
 
     def detect(self) -> None:
         """
