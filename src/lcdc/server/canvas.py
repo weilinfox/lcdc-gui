@@ -365,7 +365,7 @@ class Canvas:
                             # accept this frame
                             frames_accept += 1
 
-                            self._display.print(self._theme.blend(frame.to_image(), self._sensors.format(True, True)[0]))
+                            self._display.print(self._theme.blend(frame.to_image(), self._sensors))
 
                             logger.debug(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
                                          f"Frame accepted t={frame_time:.3f}s  "

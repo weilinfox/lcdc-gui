@@ -8,6 +8,8 @@ import string
 from PIL import Image, ImageDraw, ImageFont
 from typing import Dict, List
 
+from ..server.sensors import Sensors
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,8 @@ class Theme:
                 "color": (0, 0, 255, 255),
                 "xy": (100, 200),
                 "size": 50,
+                "unit": True,
+                "cels": True,
             }
         ]
 
@@ -115,7 +119,7 @@ class Theme:
 
         img.save(self.mask, format="PNG")
 
-    def blend(self, _background: Image, _sensor_data: Dict) -> Image:
+    def blend(self, _background: Image, _sensor: Sensors) -> Image:
         base = _background.convert("RGBA")
 
         if self.mask_img.size != base.size:
@@ -128,7 +132,9 @@ class Theme:
             if "text" in w.keys():
                 text = w["text"]
             else:
-                text = _sensor_data.get(w["widget"], "NULL")
+                unit = w.get("unit", True)
+                cels = w.get("cels", True)
+                text = _sensor.format(w["widget"], unit, cels)[0]
             xy = tuple(w.get("xy", (50, 50)))
             color = tuple(w.get("color", (0, 0, 0, 255)))
             size = w.get("size", 10)

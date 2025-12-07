@@ -5,7 +5,7 @@ import pathlib
 import psutil
 import time
 
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 
 logger = logging.getLogger(__name__)
@@ -46,37 +46,6 @@ class _CPU:
         self.cpu_usage_core = psutil.cpu_percent(percpu=True)
         self.cpu_freq = psutil.cpu_freq(percpu=False).current
         self.cpu_freq_core = [ i.current for i in psutil.cpu_freq(percpu=True) ]
-
-    def format(self, unit: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
-        if self.cpu_count == 0:
-            return {}, {}
-
-        max_usage = 0.0
-        max_freq = 0.0
-        for i, v in enumerate(self.cpu_freq_core):
-            max_freq = max(max_freq, v)
-        for i, v in enumerate(self.cpu_usage_core):
-            max_usage = max(max_usage, v)
-
-        value = {
-            "CpuFreq": f"{self.cpu_freq / 1000:4.2f}" + "GHz" if unit else "",
-            "CpuUsage": f"{self.cpu_usage:4.1f}" + "%" if unit else "",
-            "CpuFreqMax": f"{max_freq / 1000:4.2f}" + "GHz" if unit else "",
-            "CpuUsageMax": f"{max_usage:4.1f}" + "%" if unit else "",
-        }
-        value.update({f"CpuFreq{i:03d}": f"{v:3.1f}" + "MHz" if unit else "" for i, v in enumerate(self.cpu_freq_core)})
-        value.update({f"CpuUsage{i:03d}": f"{v:4.1f}" + "%" if unit else "" for i, v in enumerate(self.cpu_usage_core)})
-
-        desc = {
-            "CpuFreq": "CPU Frequency in GHz",
-            "CpuUsage": "CPU Usage",
-            "CpuFreqMax": "CPU Core Frequency Max in GHz",
-            "CpuUsageMax": "CPU Core Usage Max",
-        }
-        desc.update({f"CpuFreq{i:03d}": f"CPU Frequency of Core {i} in MHz" for i in range(self.cpu_count)})
-        desc.update({f"CpuUsage{i:03d}": f"CPU Usage of Core {i}" for i in range(self.cpu_count)})
-
-        return value, desc
 
     def __str__(self) -> str:
         return (f'CPU Cores: {self.cpu_count}\n'
@@ -153,29 +122,6 @@ class _GPU:
             self.nvidia = False
             self.pynvml.nvmlShutdown()
 
-    def format(self, unit: bool, cels: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
-        value = {}
-        desc = {}
-
-        if self.nvidia:
-            value.update({f"GpuUsage{i:03d}": f"{v:4.1f}" + "%" if unit else "" for i, v in enumerate(self.nvidia_dev_usages)})
-            value.update({f"GpuMemoryUsage{i:03d}": f"{v * 100.0 / self.nvidia_dev_mem_total[i]:4.1f}" + "%" if unit else "" for i, v in enumerate(self.nvidia_dev_mem_used)})
-            value.update({f"GpuMemoryFree{i:03d}": f"{v / 1073741824.0:5.2f}" + "GB" if unit else "" for i, v in enumerate(self.nvidia_dev_mem_free)})
-            if cels:
-                value.update({f"GpuTemp{i:03d}": f"{v:4.1f}" + "℃" if unit else "" for i, v in enumerate(self.nvidia_dev_temps)})
-            else:
-                value.update({f"GpuTemp{i:03d}": f"{_c2f(v):5.1f}" + "℉" if unit else "" for i, v in enumerate(self.nvidia_dev_temps)})
-
-            desc.update({f"GpuUsage{i:03d}": f"GPU Usage of Card ({i})" for i in range(self.nvidia_dev_count)})
-            desc.update({f"GpuMemoryUsage{i:03d}": f"GPU Memory Usage of Card {self.nvidia_dev_names[i]} ({i})" for i in range(self.nvidia_dev_count)})
-            desc.update({f"GpuMemoryFree{i:03d}": f"GPU Memory Free of Card {self.nvidia_dev_names[i]} ({i}) in GB" for i in range(self.nvidia_dev_count)})
-            if cels:
-                desc.update({f"GpuTemp{i:03d}": f"GPU Temperature of Card {self.nvidia_dev_names[i]} ({i}) in ℃" for i in range(self.nvidia_dev_count)})
-            else:
-                desc.update({f"GpuTemp{i:03d}": f"GPU Temperature of Card {self.nvidia_dev_names[i]} ({i}) in ℉" for i in range(self.nvidia_dev_count)})
-
-        return value, desc
-
     def __str__(self) -> str:
         return (f"Nvidia Count {self.nvidia_dev_count}\n"
                 f"Nvidia Names: {self.nvidia_dev_names}\n"
@@ -216,20 +162,6 @@ class _MEMORY:
         self.swap_free = m.free
         self.swap_usage = m.percent
 
-    def format(self, unit: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
-        value = {"MemoryDdrUsage": f"{self.usage:4.1f}" + "%" if unit else "",
-                 "MemoryDdrFree": f"{self.free / 1073741824.0:5.2f}" + "GB" if unit else "",
-                 "MemorySwapUsage": f"{self.swap_usage:4.1f}" + "%" if unit else "",
-                 "MemorySwapFree": f"{self.swap_free / 1073741824.0:5.2f}" + "GB" if unit else "",
-                 }
-        desc = {"MemoryDdrUsage": "Memory Usage",
-                "MemoryDdrFree": "Memory Free in GB",
-                "MemorySwapUsage": "Swap Usage",
-                "MemorySwapFree": "Swap Free in GB",
-                }
-
-        return value, desc
-
     def __str__(self) -> str:
         return (f"Memory Usage: {self.usage}\n"
                 f"Memory Free: {self.free}\n"
@@ -265,22 +197,6 @@ class _DISK:
         self.rate_write = (self.bytes_write - self.bytes_write_old) / (self.bytes_time - self.bytes_time_old)
         self.rate_read = (self.bytes_read - self.bytes_read_old) / (self.bytes_time - self.bytes_time_old)
 
-    def format(self, unit: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
-        value = {"DiskWrite": f"{self.bytes_write / 1073741824.0 if self.bytes_write > 1048502599.68 else self.bytes_write / 1048576.0:5.1f}" +
-                              ("GB" if self.bytes_write > 1048502599.68 else "MB" if unit else ""),
-                 "DiskRead": f"{self.bytes_read / 1073741824.0 if self.bytes_read > 1048502599.68 else self.bytes_read / 1048576.0:5.1f}" +
-                             ("GB" if self.bytes_read > 1048502599.68 else "MB" if unit else ""),
-                 "DiskWriteRate": f"{self.rate_write / 1048576.0:5.1f}" + ("MB" if unit else ""),
-                 "DiskReadRate": f"{self.rate_read / 1048576.0:5.1f}" + ("MB" if unit else ""),
-                 }
-        desc = {"DiskWrite": "Disk Write Count in MB/GB",
-                "DiskRead": "Disk Read Count in MB/GB",
-                "DiskWriteRate": "Disk Write Rate in MB",
-                "DiskReadRate": "Disk Read Rate in MB",
-                 }
-
-        return value, desc
-
     def __str__(self) -> str:
         return (f'Disk Bytes Write: {self.bytes_write}\n'
                 f'Disk Bytes Read: {self.bytes_read}\n'
@@ -315,24 +231,6 @@ class _NET:
 
         self.rate_sent = (self.bytes_sent - self.bytes_sent_old) / (self.bytes_time - self.bytes_time_old)
         self.rate_recv = (self.bytes_recv - self.bytes_recv_old) / (self.bytes_time - self.bytes_time_old)
-
-    def format(self, unit: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
-        value = {"NetworkSent": f"{self.bytes_sent / 1073741824.0 if self.bytes_sent > 1048502599.68 else self.bytes_sent / 1048576.0:5.1f}" +
-                                ("GB" if self.bytes_sent > 1048502599.68 else "MB" if unit else ""),
-                 "NetworkRecv": f"{self.bytes_recv / 1073741824.0 if self.bytes_recv > 1048502599.68 else self.bytes_recv / 1048576.0:5.1f}" +
-                                ("GB" if self.bytes_recv > 1048502599.68 else "MB" if unit else ""),
-                 "NetworkSentRate": f"{self.rate_sent / 1048576.0 if self.rate_sent > 1023928.32 else self.rate_sent / 1024.0:6.2f}" +
-                                    ("MB" if self.rate_sent > 1023928.32 else "KB" if unit else ""),
-                 "NetworkRecvRate": f"{self.rate_recv / 1048576.0 if self.rate_recv > 1023928.32 else self.rate_recv / 1024.0:6.2f}" +
-                                    ("MB" if self.rate_recv > 1023928.32 else "KB" if unit else ""),
-                 }
-        desc = {"NetworkSent": "Network Sent Count in MB/GB",
-                "NetworkRecv": "Network Received Count in MB/GB",
-                "NetworkSentRate": "Network Sent Rate in KB/MB",
-                "NetworkRecvRate": "Network Received Rate in KB/MB",
-                 }
-
-        return value, desc
 
     def __str__(self) -> str:
         return (f'Network Bytes Sent: {self.bytes_sent}\n'
@@ -505,42 +403,6 @@ class _TEMP:
         self.misc_names = dev_names
         self.misc_paths = path_list
 
-    def format(self, unit: bool, cels: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
-        value = {}
-        desc = {}
-
-        if cels:
-            for c in range(self.cpu_count):
-                value.update({f"CpuTemp{i:03d}": f"{v[1]:4.1f}" + "℃" if unit else "" for i, v in enumerate(self.cpu_temps[c])})
-            for c in range(self.disk_count):
-                value.update({f"DiskTemp{i:03d}": f"{v[1]:4.1f}" + "℃" if unit else "" for i, v in enumerate(self.disk_temps[c])})
-            for c in range(self.misc_count):
-                value.update({f"MiscTemp{i:03d}": f"{v[1]:4.1f}" + "℃" if unit else "" for i, v in enumerate(self.misc_temps[c])})
-        else:
-            for c in range(self.cpu_count):
-                value.update({f"CpuTemp{i:03d}": f"{_c2f(v[1]):5.1f}" + "℉" if unit else "" for i, v in enumerate(self.cpu_temps[c])})
-            for c in range(self.disk_count):
-                value.update({f"DiskTemp{i:03d}": f"{_c2f(v[1]):5.1f}" + "℉" if unit else "" for i, v in enumerate(self.disk_temps[c])})
-            for c in range(self.misc_count):
-                value.update({f"MiscTemp{i:03d}": f"{_c2f(v[1]):5.1f}" + "℉" if unit else "" for i, v in enumerate(self.misc_temps[c])})
-
-        if cels:
-            for c in range(self.cpu_count):
-                desc.update({f"CpuTemp{i:03d}": f"CPU Temperature of {self.cpu_names[c]} {v[0]}({i}) in ℃" for i, v in enumerate(self.cpu_temps[c])})
-            for c in range(self.disk_count):
-                desc.update({f"DiskTemp{i:03d}": f"Disk Temperature of {self.disk_names[c]} {v[0]}({i}) in ℃" for i, v in enumerate(self.disk_temps[c])})
-            for c in range(self.misc_count):
-                desc.update({f"MiscTemp{i:03d}": f"Misc Temperature of {self.misc_names[c]} {v[0]}({i}) in ℃" for i, v in enumerate(self.misc_temps[c])})
-        else:
-            for c in range(self.cpu_count):
-                desc.update({f"CpuTemp{i:03d}": f"CPU Temperature of {self.cpu_names[c]} {v[0]}({i}) in ℉" for i, v in enumerate(self.cpu_temps[c])})
-            for c in range(self.disk_count):
-                desc.update({f"DiskTemp{i:03d}": f"Disk Temperature of {self.disk_names[c]} {v[0]}({i}) in ℉" for i, v in enumerate(self.disk_temps[c])})
-            for c in range(self.misc_count):
-                desc.update({f"MiscTemp{i:03d}": f"Misc Temperature of {self.misc_names[c]} {v[0]}({i}) in ℉" for i, v in enumerate(self.misc_temps[c])})
-
-        return value, desc
-
     def __str__(self) -> str:
         return (f"CPU Count {self.cpu_count}\n"
                 f"CPU Names: {self.cpu_names}\n"
@@ -567,23 +429,6 @@ class _SYSTEM:
         self.load_average = psutil.getloadavg()
         self.iowait_percent = psutil.cpu_times(percpu=False).iowait / self.cpu_count / 100.0
 
-    def format(self, unit: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
-        value = {"SystemLoad": f"{self.load_average[0]:5.2f}, {self.load_average[1]:5.2f}, {self.load_average[2]:5.2f}",
-                 "SystemIoWait": f"{self.iowait_percent:5.2f}" + "%" if unit else ""
-                 }
-        uptime = self.boot_time-time.time()
-        if uptime < 86400.0:
-            value.update({"SystemUptime": time.strftime("%_H:%M:%S", time.gmtime(uptime)),})
-        else:
-            value.update({"SystemUptime": f"{uptime // 86400.0:.0f} days, " + time.strftime("%_H:%M:%S", time.gmtime(uptime)),})
-
-        desc = {"SystemLoad": "System Average Load",
-                "SystemUptime": "Uptime",
-                "SystemIoWait": "CPU Time IO Wait Percentage",
-                 }
-
-        return value, desc
-
     def __str__(self) -> str:
         return (f"Boot Time: {self.boot_time}\n"
                 f'Load Average: {self.load_average}\n'
@@ -604,9 +449,12 @@ class Sensors:
 
         self._old_update = time.monotonic()
         self.format_value = {}
+        self.format_def: Dict[str, Callable] = {}
         self.format_desc = {}
 
-        self._update()
+        # init format_desc and format_def
+        # self._update()
+        self.format("No such key", True, True)
 
     def _update(self):
         update = time.monotonic()
@@ -620,25 +468,217 @@ class Sensors:
             self._mem.update()
             self._system.update()
 
-    def format(self, unit: bool, cels: bool) -> Tuple[Dict[str, str], Dict[str, str]]:
+            self.format_value = {}
+
+    def format(self, key: str, unit: bool, cels: bool) -> Tuple[str, str]:
         self._update()
 
-        value = {}
-        desc = {}
+        if key not in self.format_desc.keys():
+            # CPUs
+            def _cpu_format():
+                if self._cpu.cpu_count == 0:
+                    return
 
-        def _update(_vd):
-            value.update(_vd[0])
-            desc.update(_vd[1])
+                _max_usage = 0.0
+                _max_freq = 0.0
+                for i, v in enumerate(self._cpu.cpu_freq_core):
+                    _max_freq = max(_max_freq, v)
+                for i, v in enumerate(self._cpu.cpu_usage_core):
+                    _max_usage = max(_max_usage, v)
 
-        _update(self._cpu.format(unit))
-        _update(self._gpu.format(unit, cels))
-        _update(self._net.format(unit))
-        _update(self._temp.format(unit, cels))
-        _update(self._disk.format(unit))
-        _update(self._mem.format(unit))
-        _update(self._system.format(unit))
+                self.format_value.update({
+                    "CpuFreq": f"{self._cpu.cpu_freq / 1000:4.2f}" + "GHz" if unit else "",
+                    "CpuUsage": f"{self._cpu.cpu_usage:4.1f}" + "%" if unit else "",
+                    "CpuFreqMax": f"{_max_freq / 1000:4.2f}" + "GHz" if unit else "",
+                    "CpuUsageMax": f"{_max_usage:4.1f}" + "%" if unit else "",
+                })
+                self.format_value.update(
+                    {f"CpuFreq{i:03d}": f"{v:3.1f}" + "MHz" if unit else "" for i, v in enumerate(self._cpu.cpu_freq_core)})
+                self.format_value.update(
+                    {f"CpuUsage{i:03d}": f"{v:4.1f}" + "%" if unit else "" for i, v in enumerate(self._cpu.cpu_usage_core)})
 
-        return value, desc
+            self.format_def.update({
+                "CpuFreq": _cpu_format,
+                "CpuUsage": _cpu_format,
+                "CpuFreqMax": _cpu_format,
+                "CpuUsageMax": _cpu_format,
+            })
+            self.format_def.update({f"CpuFreq{i:03d}": _cpu_format for i in range(self._cpu.cpu_count)})
+            self.format_def.update({f"CpuUsage{i:03d}": _cpu_format for i in range(self._cpu.cpu_count)})
+
+            self.format_desc = {
+                "CpuFreq": "CPU Frequency in GHz",
+                "CpuUsage": "CPU Usage",
+                "CpuFreqMax": "CPU Core Frequency Max in GHz",
+                "CpuUsageMax": "CPU Core Usage Max",
+            }
+            self.format_desc.update({f"CpuFreq{i:03d}": f"CPU Frequency of Core {i} in MHz" for i in range(self._cpu.cpu_count)})
+            self.format_desc.update({f"CpuUsage{i:03d}": f"CPU Usage of Core {i}" for i in range(self._cpu.cpu_count)})
+
+            # GPUs
+            if self._gpu.nvidia:
+                def _gpu_nv_format():
+                    self.format_value.update({f"GpuUsage{i:03d}": f"{v:4.1f}" + "%" if unit else "" for i, v in enumerate(self._gpu.nvidia_dev_usages)})
+                    self.format_value.update({f"GpuMemoryUsage{i:03d}": f"{v * 100.0 / self._gpu.nvidia_dev_mem_total[i]:4.1f}" + "%" if unit else "" for i, v in enumerate(self._gpu.nvidia_dev_mem_used)})
+                    self.format_value.update({f"GpuMemoryFree{i:03d}": f"{v / 1073741824.0:5.2f}" + "GB" if unit else "" for i, v in enumerate(self._gpu.nvidia_dev_mem_free)})
+                    if cels:
+                        self.format_value.update({f"GpuTemp{i:03d}": f"{v:4.1f}" + "℃" if unit else "" for i, v in enumerate(self._gpu.nvidia_dev_temps)})
+                    else:
+                        self.format_value.update({f"GpuTemp{i:03d}": f"{_c2f(v):5.1f}" + "℉" if unit else "" for i, v in enumerate(self._gpu.nvidia_dev_temps)})
+
+                self.format_def.update({f"GpuUsage{i:03d}": _gpu_nv_format for i in range(self._gpu.nvidia_dev_count)})
+                self.format_def.update({f"GpuMemoryUsage{i:03d}": _gpu_nv_format for i in range(self._gpu.nvidia_dev_count)})
+                self.format_def.update({f"GpuMemoryFree{i:03d}": _gpu_nv_format for i in range(self._gpu.nvidia_dev_count)})
+                self.format_def.update({f"GpuTemp{i:03d}": _gpu_nv_format for i in range(self._gpu.nvidia_dev_count)})
+
+                self.format_desc.update({f"GpuUsage{i:03d}": f"GPU Usage of Card ({i})" for i in range(self._gpu.nvidia_dev_count)})
+                self.format_desc.update(
+                    {f"GpuMemoryUsage{i:03d}": f"GPU Memory Usage of Card {self._gpu.nvidia_dev_names[i]} ({i})" for i in
+                     range(self._gpu.nvidia_dev_count)})
+                self.format_desc.update(
+                    {f"GpuMemoryFree{i:03d}": f"GPU Memory Free of Card {self._gpu.nvidia_dev_names[i]} ({i}) in GB" for i in
+                     range(self._gpu.nvidia_dev_count)})
+                self.format_desc.update(
+                    {f"GpuTemp{i:03d}": f"GPU Temperature of Card {self._gpu.nvidia_dev_names[i]} ({i})" for i in
+                     range(self._gpu.nvidia_dev_count)})
+
+            # Memory
+            def _memory_format():
+                self.format_value.update({"MemoryDdrUsage": f"{self._mem.usage:4.1f}" + "%" if unit else "",
+                                          "MemoryDdrFree": f"{self._mem.free / 1073741824.0:5.2f}" + "GB" if unit else "",
+                                          "MemorySwapUsage": f"{self._mem.swap_usage:4.1f}" + "%" if unit else "",
+                                          "MemorySwapFree": f"{self._mem.swap_free / 1073741824.0:5.2f}" + "GB" if unit else "",
+                                          })
+
+            self.format_def.update({"MemoryDdrUsage": _memory_format,
+                                    "MemoryDdrFree": _memory_format,
+                                    "MemorySwapUsage": _memory_format,
+                                    "MemorySwapFree": _memory_format,
+                                    })
+
+            self.format_desc.update({"MemoryDdrUsage": "Memory Usage",
+                                     "MemoryDdrFree": "Memory Free in GB",
+                                     "MemorySwapUsage": "Swap Usage",
+                                     "MemorySwapFree": "Swap Free in GB",
+                                     })
+
+            # Disk
+            def _disk_format():
+                self.format_value.update({
+                    "DiskWrite": f"{self._disk.bytes_write / 1073741824.0 if self._disk.bytes_write > 1048502599.68 else self._disk.bytes_write / 1048576.0:5.1f}" +
+                                 ("GB" if self._disk.bytes_write > 1048502599.68 else "MB" if unit else ""),
+                    "DiskRead": f"{self._disk.bytes_read / 1073741824.0 if self._disk.bytes_read > 1048502599.68 else self._disk.bytes_read / 1048576.0:5.1f}" +
+                                ("GB" if self._disk.bytes_read > 1048502599.68 else "MB" if unit else ""),
+                    "DiskWriteRate": f"{self._disk.rate_write / 1048576.0:5.1f}" + ("MB" if unit else ""),
+                    "DiskReadRate": f"{self._disk.rate_read / 1048576.0:5.1f}" + ("MB" if unit else ""),
+                    })
+
+            self.format_def.update({"DiskWrite": _disk_format,
+                                    "DiskRead": _disk_format,
+                                    "DiskWriteRate": _disk_format,
+                                    "DiskReadRate": _disk_format,
+                                    })
+
+            self.format_desc.update({"DiskWrite": "Disk Write Count in MB/GB",
+                                     "DiskRead": "Disk Read Count in MB/GB",
+                                     "DiskWriteRate": "Disk Write Rate in MB",
+                                     "DiskReadRate": "Disk Read Rate in MB",
+                                     })
+
+            # Net
+            def _net_format():
+                self.format_value.update({
+                    "NetworkSent": f"{self._net.bytes_sent / 1073741824.0 if self._net.bytes_sent > 1048502599.68 else self._net.bytes_sent / 1048576.0:5.1f}" +
+                                   ("GB" if self._net.bytes_sent > 1048502599.68 else "MB" if unit else ""),
+                    "NetworkRecv": f"{self._net.bytes_recv / 1073741824.0 if self._net.bytes_recv > 1048502599.68 else self._net.bytes_recv / 1048576.0:5.1f}" +
+                                   ("GB" if self._net.bytes_recv > 1048502599.68 else "MB" if unit else ""),
+                    "NetworkSentRate": f"{self._net.rate_sent / 1048576.0 if self._net.rate_sent > 1023928.32 else self._net.rate_sent / 1024.0:6.2f}" +
+                                       ("MB" if self._net.rate_sent > 1023928.32 else "KB" if unit else ""),
+                    "NetworkRecvRate": f"{self._net.rate_recv / 1048576.0 if self._net.rate_recv > 1023928.32 else self._net.rate_recv / 1024.0:6.2f}" +
+                                       ("MB" if self._net.rate_recv > 1023928.32 else "KB" if unit else ""),
+                    })
+
+            self.format_def.update({"NetworkSent": _net_format,
+                                    "NetworkRecv": _net_format,
+                                    "NetworkSentRate": _net_format,
+                                    "NetworkRecvRate": _net_format,
+                                    })
+
+            self.format_desc.update({"NetworkSent": "Network Sent Count in MB/GB",
+                                     "NetworkRecv": "Network Received Count in MB/GB",
+                                     "NetworkSentRate": "Network Sent Rate in KB/MB",
+                                     "NetworkRecvRate": "Network Received Rate in KB/MB",
+                                     })
+            # temperature
+            def _temp_format():
+                if cels:
+                    for _c in range(self._temp.cpu_count):
+                        self.format_desc.update({f"CpuTemp{i:03d}": f"{v[1]:4.1f}" + "℃" if unit else "" for i, v in
+                                                 enumerate(self._temp.cpu_temps[_c])})
+                    for _c in range(self._temp.disk_count):
+                        self.format_desc.update({f"DiskTemp{i:03d}": f"{v[1]:4.1f}" + "℃" if unit else "" for i, v in
+                                                 enumerate(self._temp.disk_temps[_c])})
+                    for _c in range(self._temp.misc_count):
+                        self.format_desc.update({f"MiscTemp{i:03d}": f"{v[1]:4.1f}" + "℃" if unit else "" for i, v in
+                                                 enumerate(self._temp.misc_temps[_c])})
+                else:
+                    for _c in range(self._temp.cpu_count):
+                        self.format_desc.update({f"CpuTemp{i:03d}": f"{_c2f(v[1]):5.1f}" + "℉" if unit else "" for i, v in
+                                                 enumerate(self._temp.cpu_temps[_c])})
+                    for _c in range(self._temp.disk_count):
+                        self.format_desc.update({f"DiskTemp{i:03d}": f"{_c2f(v[1]):5.1f}" + "℉" if unit else "" for i, v in
+                                                 enumerate(self._temp.disk_temps[_c])})
+                    for _c in range(self._temp.misc_count):
+                        self.format_desc.update({f"MiscTemp{i:03d}": f"{_c2f(v[1]):5.1f}" + "℉" if unit else "" for i, v in
+                                                 enumerate(self._temp.misc_temps[_c])})
+
+            for c in range(self._temp.cpu_count):
+                self.format_def.update({f"CpuTemp{i:03d}": _temp_format for i in range(len(self._temp.cpu_temps[c]))})
+            for c in range(self._temp.disk_count):
+                self.format_def.update({f"DiskTemp{i:03d}": _temp_format for i in range(len(self._temp.disk_temps[c]))})
+            for c in range(self._temp.misc_count):
+                self.format_def.update({f"MiscTemp{i:03d}": _temp_format for i in range(len(self._temp.misc_temps[c]))})
+
+            for c in range(self._temp.cpu_count):
+                self.format_desc.update(
+                    {f"CpuTemp{i:03d}": f"CPU Temperature of {self._temp.cpu_names[c]} {v[0]}({i})" for i, v in
+                     enumerate(self._temp.cpu_temps[c])})
+            for c in range(self._temp.disk_count):
+                self.format_desc.update(
+                    {f"DiskTemp{i:03d}": f"Disk Temperature of {self._temp.disk_names[c]} {v[0]}({i})" for i, v in
+                     enumerate(self._temp.disk_temps[c])})
+            for c in range(self._temp.misc_count):
+                self.format_desc.update(
+                    {f"MiscTemp{i:03d}": f"Misc Temperature of {self._temp.misc_names[c]} {v[0]}({i})" for i, v in
+                     enumerate(self._temp.misc_temps[c])})
+
+            # system
+            def _system_format():
+                self.format_value.update({
+                    "SystemLoad": f"{self._system.load_average[0]:5.2f}, {self._system.load_average[1]:5.2f}, {self._system.load_average[2]:5.2f}",
+                    "SystemIoWait": f"{self._system.iowait_percent:5.2f}" + "%" if unit else ""
+                    })
+                _uptime = self._system.boot_time - time.time()
+                if _uptime < 86400.0:
+                    self.format_value.update({"SystemUptime": time.strftime("%_H:%M:%S", time.gmtime(_uptime)), })
+                else:
+                    self.format_value.update({"SystemUptime": f"{_uptime // 86400.0:.0f} days, " +
+                                                              time.strftime("%_H:%M:%S", time.gmtime(_uptime)), })
+
+            self.format_def.update({"SystemLoad": _system_format,
+                                    "SystemUptime": _system_format,
+                                    "SystemIoWait": _system_format,
+                                    })
+
+            self.format_desc.update({"SystemLoad": "System Average Load",
+                                     "SystemUptime": "Uptime",
+                                     "SystemIoWait": "CPU Time IO Wait Percentage",
+                                     })
+
+        if key not in self.format_value.keys():
+            self.format_def.get(key, lambda: None)()
+
+        return self.format_value.get(key, "None"), self.format_desc.get(key, "None")
 
     def clean(self):
         """
