@@ -29,6 +29,7 @@ def run(__listen_addr: str, __listen_port: int, __debug: bool, __config_dir: pat
     lcdc_app = flask.Flask(__name__)
     lcdc_server = werkzeug.serving.make_server(host=__listen_addr, port=__listen_port, app=lcdc_app, passthrough_errors=not __debug)
     lcdc_sensors = Sensors()
+    lcdc_sensors_desc = lcdc_sensors.format_desc
 
     # main process
     lcdc_configs = Config(__config_dir, __data_dir)
@@ -48,14 +49,17 @@ def run(__listen_addr: str, __listen_port: int, __debug: bool, __config_dir: pat
 
     @lcdc_app.route("/lcdc/sensors", methods=["GET"])
     def route_lcdc_sensors():
+        # {key: description}
         return flask.jsonify(lcdc_sensors.format_desc)
 
-    @lcdc_app.route("/lcdc/format_key", methods=["GET"])
-    def route_lcdc_sensor_format():
+    @lcdc_app.route("/lcdc/sensors/format_key", methods=["GET"])
+    def route_lcdc_sensor_format_key():
         key = flask.request.args.get("key", "")
-        unit = "unit" in flask.request.args.keys()
-        cels = "cels" in flask.request.args.keys()
-        ret = lcdc_sensors.format(key, unit, cels)
+        unit = flask.request.args.get("unit", "1")
+        cels = flask.request.args.get("cels", "1")
+        # without unit: unit=0
+        #   fahrenheit: cels=0
+        ret = lcdc_sensors.format(key, unit != "0", cels != "0")
         return flask.jsonify({
             "request_key": key,
             "format_str": ret[0],
