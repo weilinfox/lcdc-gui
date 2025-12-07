@@ -48,12 +48,18 @@ def run(__listen_addr: str, __listen_port: int, __debug: bool, __config_dir: pat
 
     @lcdc_app.route("/lcdc/sensors", methods=["GET"])
     def route_lcdc_sensors():
-        sensors = lcdc_sensors.format(True, True)
+        return flask.jsonify(lcdc_sensors.format_desc)
+
+    @lcdc_app.route("/lcdc/format_key", methods=["GET"])
+    def route_lcdc_sensor_format():
+        key = flask.request.args.get("key", "")
+        unit = "unit" in flask.request.args.keys()
+        cels = "cels" in flask.request.args.keys()
+        ret = lcdc_sensors.format(key, unit, cels)
         return flask.jsonify({
-            k: {
-                "format_str": v,
-                "desc": sensors[1][k],
-            } for k, v in sensors[0].items()
+            "request_key": key,
+            "format_str": ret[0],
+            "description": ret[1],
         })
 
     # SIGINT handler
