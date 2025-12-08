@@ -183,7 +183,11 @@ class Canvas:
                             for af in packet.decode():
                                 if self.stop_env.is_set():
                                     break
-                                audio_q.put(af, timeout=timeout_q)
+                                try:
+                                    audio_q.put(af, timeout=timeout_q)
+                                except queue.Full:
+                                    logger.warning(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
+                                                   f"Theme background demux audio queue full")
                                 if buf_use:
                                     buf_audio.append(af)
 
@@ -192,8 +196,11 @@ class Canvas:
                             for vf in packet.decode():
                                 if self.stop_env.is_set():
                                     break
-
-                                video_q.put(vf, timeout=timeout_q)
+                                try:
+                                    video_q.put(vf, timeout=timeout_q)
+                                except queue.Full:
+                                    logger.warning(f"Display {self._display_info[0]:04x}:{self._display_info[1]:04x}: "
+                                                   f"Theme background demux video queue full")
                                 if buf_use:
                                     buf_video.append(vf)
 
