@@ -4,31 +4,31 @@ import ctypes.util
 import dataclasses
 import logging
 
-from typing import Dict, List
+from typing import Dict, List, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
 class _FontRaw:
-    namelang: List[str]
     family: List[str]
     familylang: List[str]
     style: List[str]
     stylelang: List[str]
-    fullname: List[str]
-    fullnamelang: List[str]
+    slant: List[int]
+    weight: List[int]
     file: List[str]
     index: List[int]
 
 
 @dataclasses.dataclass
 class FontInfo:
-    family: str
-    familylang: str
-    style: str
-    stylelang: str
-    fullname: str
+    family: List[str]
+    familylang: List[str]
+    style: List[str]
+    stylelang: List[str]
+    slant: int
+    weight: int
     file: str
 
 
@@ -37,9 +37,9 @@ class FontManager:
         self.fontconfig = ctypes.util.find_library("fontconfig")
         self.font_raw: List[_FontRaw] = []
         # { family: { style: List[FontInfo] } }
-        self.fonts: Dict[str, Dict[str, List[FontInfo]]] = {}
+        self.fonts: Dict[str, Dict[Tuple[int, int], List[FontInfo]]] = {}
         self.families: List[str] = []
-        self.styles: Dict[str, List[str]] = {}
+        self.styles: Dict[str, List[Tuple[int, int]]] = {}
 
     def init(self):
         if self.fontconfig is None:
@@ -81,12 +81,16 @@ class FontManager:
         _FcNamelang = b"namelang"  # String  Language name to be used for the default value of familylang, stylelang and fullnamelang
         _FcFamily = b"family"  # String  Font family names
         _FcFamilyLang = b"familylang"  # String  Language corresponding to each family name
+        _FcSlant = b"slant"  # Int     Italic, oblique or roman
+        _FcWeight = b"weight"  # Int     Light, medium, demibold, bold or black
         _FcStyle = b"style"  # String  Font style. Overrides weight and slant
         _FcStyleLang = b"stylelang"  # String  Language corresponding to each style name
         _FcFullname = b"fullname"  # String  Font face full name where different from family and family + style
         _FcFullnameLang = b"fullnamelang"  # String  Language corresponding to each fullname
         _FcFile = b"file"  # String  The filename holding the font relative to the config's sysroot
         _FcIndex = b"index"  # Int     The index of the font within the file
+        _FcVariable = b"variable"  # Bool    Whether font is Variable Font
+        _FcDecorative = b"decorative"  # Bool    Whether the style is a decorative variant
 
         # functions
         fc.FcInit.restype = _FcBool
@@ -97,6 +101,10 @@ class FontManager:
         fc.FcPatternAddString.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_char_p]
         fc.FcPatternCreate.restype = _FcPatternP
         fc.FcPatternDestroy.argtypes = [_FcPatternP]
+        fc.FcPatternGetBool.restype = _FcResult
+        fc.FcPatternGetBool.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(_FcBool)]
+        fc.FcPatternGetInteger.restype = _FcResult
+        fc.FcPatternGetInteger.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
         fc.FcPatternGetString.restype = _FcResult
         fc.FcPatternGetString.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)]
         fc.FcObjectSetBuild.restype = _FcObjectSetP
@@ -106,8 +114,8 @@ class FontManager:
             raise RuntimeError(f"Font subsystem not init for {self.fontconfig} FcInit failed")
 
         # build an object set from a null-terminated list of property names
-        objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang,
-                                     _FcFullname, _FcFullnameLang, _FcFile, _FcIndex, None)
+        objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang, _FcSlant,
+                                     _FcWeight, _FcFullname, _FcFullnameLang, _FcFile, _FcIndex, None)
         # build patterns with no properties
         pat = fc.FcPatternCreate()
         # list fonts
@@ -118,30 +126,62 @@ class FontManager:
         # list of FcPattern
         fontsets = ctypes.cast(cfontsets, ctypes.POINTER(_FcFontSet)).contents
 
-        def _fc_pattern_list_strings(_pattern: _FcPatternP, _property: bytes) -> List[str]:
+        def _fc_pattern_list_strings(_pattern: _FcPatternP, _property: bytes) -> Union[List[str], None]:
             out_list: List[str] = []
             idx: int = 0
 
             while True:
                 _s = ctypes.c_char_p()
                 _result = fc.FcPatternGetString(p, _property, idx, ctypes.byref(_s))
-                if _result != _FcResultMatch:
+                if _result == _FcResultMatch:
+                    pass
+                elif _result == _FcResultNoId:
                     break
+                elif _result in [_FcResultNoMatch, _FcResultTypeMismatch]:
+                    return None
+                elif _result == _FcResultOutOfMemory:
+                    raise RuntimeError(f"Font subsystem not init for {_property} FcPatternGetString return FcResultOutOfMemory")
                 out_list.append(_s.value.decode("utf-8", errors="replace"))
                 idx += 1
 
             return out_list
 
-        def _fc_pattern_get_int(_pattern: _FcPatternP, _property: bytes) -> List[int]:
+        def _fc_pattern_get_int(_pattern: _FcPatternP, _property: bytes) -> Union[List[int], None]:
             out_list: List[int] = []
             idx: int = 0
 
             while True:
-                _i = ctypes.c_char_p()
-                _result = fc.FcPatternGetString(p, _property, idx, ctypes.byref(_i))
-                if _result != _FcResultMatch:
+                _i = ctypes.c_int()
+                _result = fc.FcPatternGetInteger(p, _property, idx, ctypes.byref(_i))
+                if _result == _FcResultMatch:
+                    pass
+                elif _result == _FcResultNoId:
                     break
+                elif _result in [_FcResultNoMatch, _FcResultTypeMismatch]:
+                    return None
+                elif _result == _FcResultOutOfMemory:
+                    raise RuntimeError(f"Font subsystem not init for {_property} FcPatternGetInteger return FcResultOutOfMemory")
                 out_list.append(_i.value)
+                idx += 1
+
+            return out_list
+
+        def _fc_pattern_get_bool(_pattern: _FcPatternP, _property: bytes) -> Union[List[bool], None]:
+            out_list: List[bool] = []
+            idx: int = 0
+
+            while True:
+                _i = _FcBool()
+                _result = fc.FcPatternGetBool(p, _property, idx, ctypes.byref(_i))
+                if _result == _FcResultMatch:
+                    pass
+                elif _result == _FcResultNoId:
+                    break
+                elif _result in [_FcResultNoMatch, _FcResultTypeMismatch]:
+                    return None
+                elif _result == _FcResultOutOfMemory:
+                    raise RuntimeError(f"Font subsystem not init for {_property} FcPatternGetBool return FcResultOutOfMemory")
+                out_list.append(_i.value == _FcTrue)
                 idx += 1
 
             return out_list
@@ -149,70 +189,45 @@ class FontManager:
         self.font_raw: List[_FontRaw] = []
         for i in range(fontsets.nfont):
             p = fontsets.fonts[i]
-            self.font_raw.append(_FontRaw(
-                namelang=_fc_pattern_list_strings(p, _FcNamelang),
+            r = _FontRaw(
                 family=_fc_pattern_list_strings(p, _FcFamily),
                 familylang=_fc_pattern_list_strings(p, _FcFamilyLang),
                 style=_fc_pattern_list_strings(p, _FcStyle),
                 stylelang=_fc_pattern_list_strings(p, _FcStyleLang),
-                fullname=_fc_pattern_list_strings(p, _FcFullname),
-                fullnamelang=_fc_pattern_list_strings(p, _FcFullnameLang),
+                slant=_fc_pattern_get_int(p, _FcSlant),
+                weight=_fc_pattern_get_int(p, _FcWeight),
                 file=_fc_pattern_list_strings(p, _FcFile),
                 index=_fc_pattern_get_int(p, _FcIndex),
-            ))
+            )
+            if r.weight is None or r.slant is None:
+                continue
+            self.font_raw.append(r)
 
         # destroy
         fc.FcPatternDestroy(pat)
         fc.FcFontSetDestroy(cfontsets)
         # parse font raw families
         for fr in self.font_raw:
-            for i in range(len(fr.family)):
-                fm = fr.family[i]
-                if fm not in self.fonts.keys():
-                    self.fonts[fm] = {}
-                    self.styles[fm] = []
-                    self.families.append(fm)
-        self.families.sort()
+            fm = fr.family[0]
+            fs = (fr.slant[0], fr.weight[0])
+            if fm not in self.fonts.keys():
+                self.fonts[fm] = {}
+                self.styles[fm] = []
+                self.families.append(fm)
 
-        # get style from family
-        for fm in self.families:
-            # list fonts
-            pat = fc.FcPatternCreate()
-            r = fc.FcPatternAddString(pat, _FcFamily, fm.encode("utf-8"))
-            if r != _FcTrue:
-                raise RuntimeError(f"Font subsystem not init for FcPatternAddString return {r} for family {fm}")
-            cfontsets = fc.FcFontList(None, pat, objset)
-            if not cfontsets:
-                raise RuntimeError(f"Font subsystem not init for FcFontList family {fm} return NULL pointer")
-            # list of FcPattern
-            fontsets = ctypes.cast(cfontsets, ctypes.POINTER(_FcFontSet)).contents
-            for i in range(fontsets.nfont):
-                p = fontsets.fonts[i]
-                r = _FontRaw(
-                    namelang=_fc_pattern_list_strings(p, _FcNamelang),
-                    family=_fc_pattern_list_strings(p, _FcFamily),
-                    familylang=_fc_pattern_list_strings(p, _FcFamilyLang),
-                    style=_fc_pattern_list_strings(p, _FcStyle),
-                    stylelang=_fc_pattern_list_strings(p, _FcStyleLang),
-                    fullname=_fc_pattern_list_strings(p, _FcFullname),
-                    fullnamelang=_fc_pattern_list_strings(p, _FcFullnameLang),
-                    file=_fc_pattern_list_strings(p, _FcFile),
-                    index=_fc_pattern_get_int(p, _FcIndex),
-                )
-                for fs in range(len(r.style)):
-                    if fs not in self.fonts[fm].keys():
-                        self.fonts[fm][r.style[fs]] = []
-                        self.styles[fm].append(r.style[fs])
-                    self.fonts[fm][r.style[fs]].append(FontInfo(
-                        family=r.family[0],
-                        familylang=r.familylang[0],
-                        style=r.style[fs],
-                        stylelang=r.stylelang[fs],
-                        file=r.file[0] if r.file else "",
-                        fullname=r.fullname[0] if r.fullname else "",
-                    ))
-            fc.FcPatternDestroy(pat)
-            fc.FcFontSetDestroy(cfontsets)
+            if fs not in self.fonts[fm].keys():
+                self.fonts[fm][fs] = []
+                self.styles[fm].append(fs)
+            self.fonts[fm][fs].append(FontInfo(
+                family=fr.family,
+                familylang=fr.familylang,
+                style=fr.style,
+                stylelang=fr.stylelang,
+                slant=fr.slant[0],
+                weight=fr.weight[0],
+                file=fr.file[0],
+            ))
+        self.families.sort()
 
         fc.FcObjectSetDestroy(objset)
         # finalize fontconfig library
@@ -222,8 +237,14 @@ if __name__ == "__main__":
     font = FontManager()
     font.init()
 
-    for f in font.families:
-        print(f)
+    for f in font.font_raw:
+        logger.warning(f)
 
-    print(font.styles["Noto Sans Arabic"])
-    print(font.fonts["Noto Sans Arabic"]["Regular"])
+    for fm in font.fonts.keys():
+        for fs in font.fonts[fm].keys():
+            if len(font.fonts[fm][fs]) > 1:
+                logger.warning(f"===== {fm}, {fs} =====")
+                for f in font.fonts[fm][fs]:
+                    logger.warning(f"\t{f}")
+                logger.warning(f"===== end =====")
+    print(font.fonts["mplus Nerd Font"])
