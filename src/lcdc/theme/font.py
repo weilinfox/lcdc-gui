@@ -15,8 +15,12 @@ class _FontRaw:
     familylang: List[str]
     style: List[str]
     stylelang: List[str]
+    fullname: List[str]
+    fullnamelang: List[str]
+    postscriptname: List[str]
     slant: List[int]
     weight: List[int]
+    width: List[int]
     file: List[str]
     index: List[int]
 
@@ -27,8 +31,12 @@ class FontInfo:
     familylang: List[str]
     style: List[str]
     stylelang: List[str]
+    fullname: List[str]
+    fullnamelang: List[str]
+    postscriptname: List[str]
     slant: int
     weight: int
+    width: int
     file: str
 
 
@@ -37,9 +45,13 @@ class FontManager:
         self.fontconfig = ctypes.util.find_library("fontconfig")
         self.font_raw: List[_FontRaw] = []
         # { family: { style: List[FontInfo] } }
-        self.fonts: Dict[str, Dict[Tuple[int, int], List[FontInfo]]] = {}
+        self.fonts: Dict[str, Dict[Tuple[int, int, int], List[FontInfo]]] = {}
         self.families: List[str] = []
-        self.styles: Dict[str, List[Tuple[int, int]]] = {}
+        self.family_styles: Dict[str, List[Tuple[int, int, int]]] = {}
+
+        self.name_fonts: Dict[str, Dict[Tuple[int, int, int], List[FontInfo]]] = {}
+        self.fullnames: List[str] = []
+        self.fullname_styles: Dict[str, List[Tuple[int, int, int]]] = {}
 
     def init(self):
         if self.fontconfig is None:
@@ -83,10 +95,12 @@ class FontManager:
         _FcFamilyLang = b"familylang"  # String  Language corresponding to each family name
         _FcSlant = b"slant"  # Int     Italic, oblique or roman
         _FcWeight = b"weight"  # Int     Light, medium, demibold, bold or black
+        _FcWidth = b"width"  # Int     Condensed, normal or expanded
         _FcStyle = b"style"  # String  Font style. Overrides weight and slant
         _FcStyleLang = b"stylelang"  # String  Language corresponding to each style name
         _FcFullname = b"fullname"  # String  Font face full name where different from family and family + style
         _FcFullnameLang = b"fullnamelang"  # String  Language corresponding to each fullname
+        _FcPostscriptname = b"postscriptname"  # String  Font family name in PostScript
         _FcFile = b"file"  # String  The filename holding the font relative to the config's sysroot
         _FcIndex = b"index"  # Int     The index of the font within the file
         _FcVariable = b"variable"  # Bool    Whether font is Variable Font
@@ -115,7 +129,7 @@ class FontManager:
 
         # build an object set from a null-terminated list of property names
         objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang, _FcSlant,
-                                     _FcWeight, _FcFullname, _FcFullnameLang, _FcFile, _FcIndex, None)
+                                     _FcWeight, _FcWidth, _FcFullname, _FcFullnameLang, _FcPostscriptname, _FcFile, _FcIndex, None)
         # build patterns with no properties
         pat = fc.FcPatternCreate()
         # list fonts
@@ -194,12 +208,16 @@ class FontManager:
                 familylang=_fc_pattern_list_strings(p, _FcFamilyLang),
                 style=_fc_pattern_list_strings(p, _FcStyle),
                 stylelang=_fc_pattern_list_strings(p, _FcStyleLang),
+                fullname=_fc_pattern_list_strings(p, _FcFullname),
+                fullnamelang=_fc_pattern_list_strings(p, _FcFullnameLang),
+                postscriptname=_fc_pattern_list_strings(p, _FcPostscriptname),
                 slant=_fc_pattern_get_int(p, _FcSlant),
                 weight=_fc_pattern_get_int(p, _FcWeight),
+                width=_fc_pattern_get_int(p, _FcWidth),
                 file=_fc_pattern_list_strings(p, _FcFile),
                 index=_fc_pattern_get_int(p, _FcIndex),
             )
-            if r.weight is None or r.slant is None:
+            if r.weight is None or r.slant is None or r.width is None:
                 continue
             self.font_raw.append(r)
 
@@ -209,25 +227,41 @@ class FontManager:
         # parse font raw families
         for fr in self.font_raw:
             fm = fr.family[0]
-            fs = (fr.slant[0], fr.weight[0])
-            if fm not in self.fonts.keys():
-                self.fonts[fm] = {}
-                self.styles[fm] = []
-                self.families.append(fm)
-
-            if fs not in self.fonts[fm].keys():
-                self.fonts[fm][fs] = []
-                self.styles[fm].append(fs)
-            self.fonts[fm][fs].append(FontInfo(
+            fn = fr.fullname[0]
+            fs = (fr.slant[0], fr.weight[0], fr.width[0])
+            fi = FontInfo(
                 family=fr.family,
                 familylang=fr.familylang,
                 style=fr.style,
                 stylelang=fr.stylelang,
+                fullname=fr.fullname,
+                fullnamelang=fr.fullnamelang,
+                postscriptname=fr.postscriptname,
                 slant=fr.slant[0],
                 weight=fr.weight[0],
+                width=fr.width[0],
                 file=fr.file[0],
-            ))
-        self.families.sort()
+            )
+
+            if fm not in self.fonts.keys():
+                self.fonts[fm] = {}
+                self.family_styles[fm] = []
+                self.families.append(fm)
+            if fs not in self.fonts[fm].keys():
+                self.fonts[fm][fs] = []
+                self.family_styles[fm].append(fs)
+            self.fonts[fm][fs].append(fi)
+
+            if fn not in self.name_fonts.keys():
+                self.name_fonts[fn] = {}
+                self.fullname_styles[fn] = []
+                self.fullnames.append(fn)
+            if fs not in self.name_fonts[fn].keys():
+                self.name_fonts[fn][fs] = []
+                self.fullname_styles[fn].append(fs)
+            self.name_fonts[fn][fs].append(fi)
+
+        self.fullnames.sort()
 
         fc.FcObjectSetDestroy(objset)
         # finalize fontconfig library
@@ -237,7 +271,7 @@ if __name__ == "__main__":
     font = FontManager()
     font.init()
 
-    for f in font.font_raw:
+    for f in font.fullnames:
         logger.warning(f)
 
     for fm in font.fonts.keys():
@@ -247,4 +281,13 @@ if __name__ == "__main__":
                 for f in font.fonts[fm][fs]:
                     logger.warning(f"\t{f}")
                 logger.warning(f"===== end =====")
-    print(font.fonts["mplus Nerd Font"])
+
+    logger.warning("")
+    logger.warning(f"===== start =====")
+    for fn in font.name_fonts.keys():
+        for fs in font.name_fonts[fn].keys():
+            if len(font.name_fonts[fn][fs]) > 1:
+                logger.warning(f"===== {fn}, {fs} =====")
+                for f in font.name_fonts[fn][fs]:
+                    logger.warning(f"\t{f}")
+                logger.warning(f"===== end =====")
