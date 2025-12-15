@@ -3,7 +3,6 @@ import ctypes
 import ctypes.util
 import dataclasses
 import logging
-import pathlib
 
 from typing import Dict, List
 
@@ -94,10 +93,14 @@ class FontManager:
         fc.FcFontList.restype = _FcFontSetP
         fc.FcFontList.argtypes = [ctypes.c_void_p, _FcPatternP, _FcObjectSetP]
         fc.FcFontSetDestroy.argtypes = [_FcFontSetP]
+        fc.FcPatternAddString.restype = _FcBool
+        fc.FcPatternAddString.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_char_p]
         fc.FcPatternCreate.restype = _FcPatternP
+        fc.FcPatternDestroy.argtypes = [_FcPatternP]
         fc.FcPatternGetString.restype = _FcResult
         fc.FcPatternGetString.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)]
         fc.FcObjectSetBuild.restype = _FcObjectSetP
+        fc.FcObjectSetDestroy.argtypes = [_FcObjectSetP]
 
         if fc.FcInit() != _FcTrue:
             raise RuntimeError(f"Font subsystem not init for {self.fontconfig} FcInit failed")
@@ -110,7 +113,7 @@ class FontManager:
         # list fonts
         cfontsets = fc.FcFontList(None, pat, objset)
         if not cfontsets:
-            raise RuntimeError(f"Font subsystem not init for FcFontList return NULL pointer")
+            raise RuntimeError("Font subsystem not init for FcFontList empty pattern return NULL pointer")
 
         # list of FcPattern
         fontsets = ctypes.cast(cfontsets, ctypes.POINTER(_FcFontSet)).contents
@@ -158,34 +161,62 @@ class FontManager:
                 index=_fc_pattern_get_int(p, _FcIndex),
             ))
 
-        # destroy a font set
+        # destroy
+        fc.FcPatternDestroy(pat)
         fc.FcFontSetDestroy(cfontsets)
-        # finalize fontconfig library
-        fc.FcFini()
-
-        # parse font raw to font dict
+        # parse font raw families
         for fr in self.font_raw:
-            print(fr)
-            for i in range(len(fr.style)):
+            for i in range(len(fr.family)):
                 fm = fr.family[i]
-                fs = fr.style[i]
                 if fm not in self.fonts.keys():
                     self.fonts[fm] = {}
                     self.styles[fm] = []
                     self.families.append(fm)
-                if fs not in self.fonts[fm].keys():
-                    self.fonts[fm][fs] = []
-                self.styles[fm].append(fs)
-                self.fonts[fm][fs].append(FontInfo(
-                    family=fm,
-                    style=fs,
-                    familylang=fr.familylang[i],
-                    stylelang=fr.stylelang[i],
-                    fullname=fr.fullname[0],
-                    file=fr.file[0],
-                ))
-
         self.families.sort()
+
+        # get style from family
+        for fm in self.families:
+            # list fonts
+            pat = fc.FcPatternCreate()
+            r = fc.FcPatternAddString(pat, _FcFamily, fm.encode("utf-8"))
+            if r != _FcTrue:
+                raise RuntimeError(f"Font subsystem not init for FcPatternAddString return {r} for family {fm}")
+            cfontsets = fc.FcFontList(None, pat, objset)
+            if not cfontsets:
+                raise RuntimeError(f"Font subsystem not init for FcFontList family {fm} return NULL pointer")
+            # list of FcPattern
+            fontsets = ctypes.cast(cfontsets, ctypes.POINTER(_FcFontSet)).contents
+            for i in range(fontsets.nfont):
+                p = fontsets.fonts[i]
+                r = _FontRaw(
+                    namelang=_fc_pattern_list_strings(p, _FcNamelang),
+                    family=_fc_pattern_list_strings(p, _FcFamily),
+                    familylang=_fc_pattern_list_strings(p, _FcFamilyLang),
+                    style=_fc_pattern_list_strings(p, _FcStyle),
+                    stylelang=_fc_pattern_list_strings(p, _FcStyleLang),
+                    fullname=_fc_pattern_list_strings(p, _FcFullname),
+                    fullnamelang=_fc_pattern_list_strings(p, _FcFullnameLang),
+                    file=_fc_pattern_list_strings(p, _FcFile),
+                    index=_fc_pattern_get_int(p, _FcIndex),
+                )
+                for fs in range(len(r.style)):
+                    if fs not in self.fonts[fm].keys():
+                        self.fonts[fm][r.style[fs]] = []
+                        self.styles[fm].append(r.style[fs])
+                    self.fonts[fm][r.style[fs]].append(FontInfo(
+                        family=r.family[0],
+                        familylang=r.familylang[0],
+                        style=r.style[fs],
+                        stylelang=r.stylelang[fs],
+                        file=r.file[0] if r.file else "",
+                        fullname=r.fullname[0] if r.fullname else "",
+                    ))
+            fc.FcPatternDestroy(pat)
+            fc.FcFontSetDestroy(cfontsets)
+
+        fc.FcObjectSetDestroy(objset)
+        # finalize fontconfig library
+        fc.FcFini()
 
 if __name__ == "__main__":
     font = FontManager()
