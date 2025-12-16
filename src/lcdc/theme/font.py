@@ -28,6 +28,7 @@ class _FontRaw:
     hinting: List[bool]
     file: List[str]
     index: List[int]
+    embolden: List[bool]
     decorative: List[bool]
     symbol: List[bool]
     variable: List[bool]
@@ -50,6 +51,7 @@ class FontInfo:
     pixelsize: float
     spacing: int
     hinting: bool
+    embolden: bool
     decorative: bool
     symbol: bool
     variable: bool
@@ -126,6 +128,7 @@ class FontManager:
         _FcIndex = b"index"  # Int     The index of the font within the file
         _FcSymbol = b"symbol"  # Bool    Whether font uses MS symbol-font encoding
         _FcVariable = b"variable"  # Bool    Whether font is Variable Font
+        _FcEmbolden = b"embolden"  # Bool    Rasterizer should synthetically embolden the font
         _FcDecorative = b"decorative"  # Bool    Whether the style is a decorative variant
 
         # functions
@@ -154,7 +157,7 @@ class FontManager:
         # build an object set from a null-terminated list of property names
         objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang, _FcSlant,
                                      _FcWeight, _FcWidth, _FcSpacing, _FcSize, _FcAspect, _FcPixelSize, _FcSymbol, _FcHinting,
-                                     _FcFullname, _FcFullnameLang, _FcPostscriptname, _FcDecorative, _FcVariable, _FcFile, _FcIndex, None)
+                                     _FcFullname, _FcFullnameLang, _FcPostscriptname, _FcEmbolden, _FcDecorative, _FcVariable, _FcFile, _FcIndex, None)
         # build patterns with no properties
         pat = fc.FcPatternCreate()
         # list fonts
@@ -264,6 +267,7 @@ class FontManager:
                 pixelsize=_fc_pattern_get_double(p, _FcPixelSize),
                 spacing=_fc_pattern_get_int(p, _FcSpacing),
                 hinting=_fc_pattern_get_bool(p, _FcHinting),
+                embolden=_fc_pattern_get_bool(p, _FcEmbolden),
                 decorative=_fc_pattern_get_bool(p, _FcDecorative),
                 symbol=_fc_pattern_get_bool(p, _FcSymbol),
                 variable=_fc_pattern_get_bool(p, _FcVariable),
@@ -284,6 +288,8 @@ class FontManager:
                 r.symbol = [False]
             if r.hinting is None:
                 r.hinting = [-1]
+            if r.embolden is None:
+                r.embolden = [-1]
             self.font_raw.append(r)
 
         # destroy
@@ -311,6 +317,7 @@ class FontManager:
                 pixelsize=fr.pixelsize[0],
                 spacing=fr.spacing[0],
                 hinting=fr.hinting[0],
+                embolden=fr.embolden[0],
                 decorative=fr.decorative[0],
                 symbol=fr.symbol[0],
                 variable=fr.variable[0],
