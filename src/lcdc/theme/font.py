@@ -29,6 +29,7 @@ class _FontRaw:
     hinting: List[bool]
     file: List[str]
     index: List[int]
+    fontformat: List[str]
     embolden: List[bool]
     decorative: List[bool]
     symbol: List[bool]
@@ -45,6 +46,7 @@ class FontInfo:
     fullname: List[str]
     fullnamelang: List[str]
     postscriptname: List[str]
+    fontformat: List[str]
     slant: int
     weight: int
     width: int
@@ -133,6 +135,7 @@ class FontManager:
         _FcIndex = b"index"  # Int     The index of the font within the file
         _FcSymbol = b"symbol"  # Bool    Whether font uses MS symbol-font encoding
         _FcVariable = b"variable"  # Bool    Whether font is Variable Font
+        _FcFontformat = b"fontformat"  # String  String name of the font format
         _FcEmbolden = b"embolden"  # Bool    Rasterizer should synthetically embolden the font
         _FcDecorative = b"decorative"  # Bool    Whether the style is a decorative variant
         _FcFonthashint = b"fonthashint"  # Bool    Whether font has hinting
@@ -161,7 +164,7 @@ class FontManager:
             raise RuntimeError(f"Font subsystem not init for {self.fontconfig} FcInit failed")
 
         # build an object set from a null-terminated list of property names
-        objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang, _FcSlant,
+        objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang, _FcSlant, _FcFontformat,
                                      _FcWeight, _FcWidth, _FcSpacing, _FcSize, _FcAspect, _FcPixelSize, _FcSymbol, _FcHinting, _FcFonthashint, _FcHintstyle,
                                      _FcFullname, _FcFullnameLang, _FcPostscriptname, _FcEmbolden, _FcDecorative, _FcVariable, _FcFile, _FcIndex, None)
         # build patterns with no properties
@@ -274,6 +277,7 @@ class FontManager:
                 spacing=_fc_pattern_get_int(p, _FcSpacing),
                 hintstyle=_fc_pattern_get_int(p, _FcHintstyle),
                 hinting=_fc_pattern_get_bool(p, _FcHinting),
+                fontformat=_fc_pattern_get_int(p, _FcFontformat),
                 embolden=_fc_pattern_get_bool(p, _FcEmbolden),
                 decorative=_fc_pattern_get_bool(p, _FcDecorative),
                 symbol=_fc_pattern_get_bool(p, _FcSymbol),
@@ -300,6 +304,8 @@ class FontManager:
                 r.embolden = [-1]
             if r.hintstyle is None:
                 r.hintstyle = [-1]
+            if r.fontformat is None:
+                r.fontformat = [-1]
             self.font_raw.append(r)
 
         # destroy
@@ -328,6 +334,7 @@ class FontManager:
                 spacing=fr.spacing[0],
                 hintstyle=fr.hintstyle[0],
                 hinting=fr.hinting[0],
+                fontformat=fr.fontformat,
                 embolden=fr.embolden[0],
                 decorative=fr.decorative[0],
                 symbol=fr.symbol[0],
