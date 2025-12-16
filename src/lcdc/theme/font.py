@@ -146,7 +146,8 @@ class FontManager:
 
         # build an object set from a null-terminated list of property names
         objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang, _FcSlant,
-                                     _FcWeight, _FcWidth, _FcSpacing, _FcFullname, _FcFullnameLang, _FcPostscriptname, _FcFile, _FcIndex, None)
+                                     _FcWeight, _FcWidth, _FcSpacing, _FcSize, _FcAspect, _FcPixelSize, _FcSymbol,
+                                     _FcFullname, _FcFullnameLang, _FcPostscriptname, _FcFile, _FcIndex, None)
         # build patterns with no properties
         pat = fc.FcPatternCreate()
         # list fonts
