@@ -32,6 +32,7 @@ class _FontRaw:
     decorative: List[bool]
     symbol: List[bool]
     variable: List[bool]
+    fonthashint: List[bool]
 
 
 @dataclasses.dataclass
@@ -55,6 +56,7 @@ class FontInfo:
     decorative: bool
     symbol: bool
     variable: bool
+    fonthashint: bool
     file: str
 
 
@@ -130,6 +132,7 @@ class FontManager:
         _FcVariable = b"variable"  # Bool    Whether font is Variable Font
         _FcEmbolden = b"embolden"  # Bool    Rasterizer should synthetically embolden the font
         _FcDecorative = b"decorative"  # Bool    Whether the style is a decorative variant
+        _FcFonthashint = b"fonthashint"  # Bool    Whether font has hinting
 
         # functions
         fc.FcInit.restype = _FcBool
@@ -156,7 +159,7 @@ class FontManager:
 
         # build an object set from a null-terminated list of property names
         objset = fc.FcObjectSetBuild(_FcNamelang, _FcFamily, _FcFamilyLang, _FcStyle, _FcStyleLang, _FcSlant,
-                                     _FcWeight, _FcWidth, _FcSpacing, _FcSize, _FcAspect, _FcPixelSize, _FcSymbol, _FcHinting,
+                                     _FcWeight, _FcWidth, _FcSpacing, _FcSize, _FcAspect, _FcPixelSize, _FcSymbol, _FcHinting, _FcFonthashint,
                                      _FcFullname, _FcFullnameLang, _FcPostscriptname, _FcEmbolden, _FcDecorative, _FcVariable, _FcFile, _FcIndex, None)
         # build patterns with no properties
         pat = fc.FcPatternCreate()
@@ -271,6 +274,7 @@ class FontManager:
                 decorative=_fc_pattern_get_bool(p, _FcDecorative),
                 symbol=_fc_pattern_get_bool(p, _FcSymbol),
                 variable=_fc_pattern_get_bool(p, _FcVariable),
+                fonthashint=_fc_pattern_get_bool(p, _FcFonthashint),
                 file=_fc_pattern_list_strings(p, _FcFile),
                 index=_fc_pattern_get_int(p, _FcIndex),
             )
@@ -321,6 +325,7 @@ class FontManager:
                 decorative=fr.decorative[0],
                 symbol=fr.symbol[0],
                 variable=fr.variable[0],
+                fonthashint=fr.fonthashint[0],
                 file=fr.file[0],
             )
 
