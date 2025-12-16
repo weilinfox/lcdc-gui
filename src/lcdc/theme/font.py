@@ -21,9 +21,13 @@ class _FontRaw:
     slant: List[int]
     weight: List[int]
     width: List[int]
+    size: List[float]
+    aspect: List[float]
+    pixelsize: List[float]
     spacing: List[int]
     file: List[str]
     index: List[int]
+    symbol: List[bool]
 
 
 @dataclasses.dataclass
@@ -38,7 +42,11 @@ class FontInfo:
     slant: int
     weight: int
     width: int
+    size: float
+    aspect: float
+    pixelsize: float
     spacing: int
+    symbol: bool
     file: str
 
 
@@ -101,11 +109,15 @@ class FontManager:
         _FcStyle = b"style"  # String  Font style. Overrides weight and slant
         _FcStyleLang = b"stylelang"  # String  Language corresponding to each style name
         _FcSpacing = b"spacing"  # Int     Proportional, dual-width, monospace or charcell
+        _FcSize = b"size"  # Double  Point size
+        _FcAspect = b"aspect"  # Double  Stretches glyphs horizontally before hinting
+        _FcPixelSize = b"pixelsize"  # Double  Pixel size
         _FcFullname = b"fullname"  # String  Font face full name where different from family and family + style
         _FcFullnameLang = b"fullnamelang"  # String  Language corresponding to each fullname
         _FcPostscriptname = b"postscriptname"  # String  Font family name in PostScript
         _FcFile = b"file"  # String  The filename holding the font relative to the config's sysroot
         _FcIndex = b"index"  # Int     The index of the font within the file
+        _FcSymbol = b"symbol"  # Bool    Whether font uses MS symbol-font encoding
         _FcVariable = b"variable"  # Bool    Whether font is Variable Font
         _FcDecorative = b"decorative"  # Bool    Whether the style is a decorative variant
 
@@ -120,6 +132,8 @@ class FontManager:
         fc.FcPatternDestroy.argtypes = [_FcPatternP]
         fc.FcPatternGetBool.restype = _FcResult
         fc.FcPatternGetBool.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(_FcBool)]
+        fc.FcPatternGetDouble.restype = _FcResult
+        fc.FcPatternGetDouble.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
         fc.FcPatternGetInteger.restype = _FcResult
         fc.FcPatternGetInteger.argtypes = [_FcPatternP, ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
         fc.FcPatternGetString.restype = _FcResult
@@ -175,7 +189,26 @@ class FontManager:
                 elif _result == _FcResultNoId:
                     break
                 elif _result in [_FcResultNoMatch, _FcResultTypeMismatch]:
-                    logger.warning(f"{_property}, {_result}")
+                    return None
+                elif _result == _FcResultOutOfMemory:
+                    raise RuntimeError(f"Font subsystem not init for {_property} FcPatternGetInteger return FcResultOutOfMemory")
+                out_list.append(_i.value)
+                idx += 1
+
+            return out_list
+
+        def _fc_pattern_get_double(_pattern: _FcPatternP, _property: bytes) -> Union[List[float], None]:
+            out_list: List[float] = []
+            idx: int = 0
+
+            while True:
+                _i = ctypes.c_double()
+                _result = fc.FcPatternGetDouble(p, _property, idx, ctypes.byref(_i))
+                if _result == _FcResultMatch:
+                    pass
+                elif _result == _FcResultNoId:
+                    break
+                elif _result in [_FcResultNoMatch, _FcResultTypeMismatch]:
                     return None
                 elif _result == _FcResultOutOfMemory:
                     raise RuntimeError(f"Font subsystem not init for {_property} FcPatternGetInteger return FcResultOutOfMemory")
@@ -218,7 +251,11 @@ class FontManager:
                 slant=_fc_pattern_get_int(p, _FcSlant),
                 weight=_fc_pattern_get_int(p, _FcWeight),
                 width=_fc_pattern_get_int(p, _FcWidth),
+                size=_fc_pattern_get_double(p, _FcSize),
+                aspect=_fc_pattern_get_double(p, _FcAspect),
+                pixelsize=_fc_pattern_get_double(p, _FcPixelSize),
                 spacing=_fc_pattern_get_int(p, _FcSpacing),
+                symbol=_fc_pattern_get_bool(p, _FcSymbol),
                 file=_fc_pattern_list_strings(p, _FcFile),
                 index=_fc_pattern_get_int(p, _FcIndex),
             )
@@ -226,6 +263,14 @@ class FontManager:
                 continue
             if r.spacing is None:
                 r.spacing = [0]
+            if r.size is None:
+                r.size = [-1]
+            if r.aspect is None:
+                r.aspect = [-1]
+            if r.pixelsize is None:
+                r.pixelsize = [-1]
+            if r.symbol is None:
+                r.symbol = [False]
             self.font_raw.append(r)
 
         # destroy
@@ -247,7 +292,11 @@ class FontManager:
                 slant=fr.slant[0],
                 weight=fr.weight[0],
                 width=fr.width[0],
+                size=fr.size[0],
+                aspect=fr.aspect[0],
+                pixelsize=fr.pixelsize[0],
                 spacing=fr.spacing[0],
+                symbol=fr.symbol[0],
                 file=fr.file[0],
             )
 
